@@ -9,10 +9,19 @@
 #include <freertos/task.h>
 #include <driver/touch_pad.h>
 #include <esp_log.h>
+#include <esp_check.h>
 
 #define NUM_LEDS 1
 #define DATA_PIN 2
 #define TOUCH_PAD TOUCH_PAD_NUM1
+
+#if CONFIG_IDF_TARGET_ESP32
+#define THRESHOLD 40 /* Greater the value, more the sensitivity */
+#elif (CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3)
+#define THRESHOLD 5000 /* Lower the value, more the sensitivity */
+#else                  // ESP32-P4 + default for other chips (to be adjusted) */
+#define THRESHOLD 500  /* Lower the value, more the sensitivity */
+#endif
 
 double clamp(double d, double min, double max) {
   const double t = d < min ? min : d;
@@ -90,7 +99,7 @@ void animate()
   int16_t sin = sin16(ms * f);
   uint8_t v = lerp8by16(192, 255, sin);
 
-  /* Range is about 29200...38000*/
+  /* Range is about 29200...38000 */
   float touch_hue = clamp((touch_value - 29200) / 25.0, 0.0, 360.0);
   Serial.printf("Hue: [%4"PRIu32"] ", touch_hue);
   Serial.printf("\n");
