@@ -1,83 +1,40 @@
-#include <limits.h>
-#include <stdio.h>
-#include <inttypes.h>
-#include <math.h>
-
 #include <FastLED.h>
 
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <driver/touch_pad.h>
-#include <esp_log.h>
-#include <esp_check.h>
-
 #define NUM_LEDS 1
-#define DATA_PIN 2
-#define TOUCH_PAD TOUCH_PAD_NUM1
+#define LED_PIN 2
+#define TOUCH_THRESHOLD 5000 /* Lower the value, more the sensitivity */
 
-#if CONFIG_IDF_TARGET_ESP32
-#define THRESHOLD 40 /* Greater the value, more the sensitivity */
-#elif (CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3)
-#define THRESHOLD 5000 /* Lower the value, more the sensitivity */
-#else                  // ESP32-P4 + default for other chips (to be adjusted) */
-#define THRESHOLD 500  /* Lower the value, more the sensitivity */
-#endif
-
-double clamp(double d, double min, double max) {
-  const double t = d < min ? min : d;
-  return t > max ? max : t;
-}
-
+RTC_DATA_ATTR int bootCount = 0;
+touch_pad_t touchPin;
 CRGB leds[NUM_LEDS];
+bool go_sleep = false;
 
-uint32_t touch_value;
+void print_wakeup_reason() {
+  esp_sleep_wakeup_cause_t wakeup_reason;
+  esp_reset_reason_t reset_reason;
 
-/*
-  Read values sensed at all available touch pads.
- Print out values in a loop on a serial monitor.
- */
-static void tp_example_read_task(void *pvParameter)
-{
-    /* Wait touch sensor init done */
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-    printf("Touch Sensor read, the output format is: \nTouchpad num:[raw data]\n\n");
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+  reset_reason = esp_reset_reason();
 
-    while (1) {
-        touch_pad_read_raw_data(TOUCH_PAD_NUM1, &touch_value);    // read raw data.
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-    }
+  switch (wakeup_reason) {
+    case ESP_SLEEP_WAKEUP_EXT0:     Serial.println("Wakeup caused by external signal using RTC_IO"); break;
+    case ESP_SLEEP_WAKEUP_EXT1:     Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
+    case ESP_SLEEP_WAKEUP_TIMER:    Serial.println("Wakeup caused by timer"); break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD: Serial.println("Wakeup caused by touchpad"); break;
+    case ESP_SLEEP_WAKEUP_ULP:      Serial.println("Wakeup caused by ULP program"); break;
+    default:                        Serial.printf("Wakeup was not caused by deep sleep: %d, reset reason: %d\n", wakeup_reason, reset_reason); break;
+  }
 }
 
-void setup()
-{
-  Serial.begin (115200);
-
-  touch_pad_init();
-  touch_pad_config(TOUCH_PAD);
-  FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-
-  /* Denoise setting at TouchSensor 0. */
-  touch_pad_denoise_t denoise = {
-      /* The bits to be cancelled are determined according to the noise level. */
-      .grade = TOUCH_PAD_DENOISE_BIT4,
-      .cap_level = TOUCH_PAD_DENOISE_CAP_L4,
-  };
-  touch_pad_denoise_set_config(&denoise);
-  touch_pad_denoise_enable();
-  ESP_LOGI(TAG, "Denoise function init");
-
-  /* Enable touch sensor clock. Work mode is "timer trigger". */
-  touch_pad_set_fsm_mode(TOUCH_FSM_MODE_TIMER);
-  touch_pad_fsm_start();
-
-  /* Start task to read values by pads. */
-  xTaskCreate(&tp_example_read_task, "touch_pad_read_task", 4096, NULL, 5, NULL);
+void touch_interrupt () {
+  go_sleep = true;
 }
 
-void loop()
-{
-  animate();
-  FastLED.show();
+void sleep() {
+  Serial.println("Going to sleep");
+  FastLED.clear(true);
+  delay(2000);
+  esp_deep_sleep_start();
 }
 
 uint8_t hue_to_int8(float hue)
@@ -98,11 +55,33 @@ void animate()
   uint16_t ms = millis();
   int16_t sin = sin16(ms * f);
   uint8_t v = lerp8by16(192, 255, sin);
+  float h = 30.0;
 
-  /* Range is about 29200...38000 */
-  float touch_hue = clamp((touch_value - 29200) / 25.0, 0.0, 360.0);
-  Serial.printf("Hue: [%4"PRIu32"] ", touch_hue);
-  Serial.printf("\n");
+  leds[0] = CHSV(hue_to_int8(h), 255, v);
+}
 
-  leds[0] = CHSV(hue_to_int8(touch_hue), 255, v);
+void setup() {
+  Serial.begin(115200);
+  delay(1000);  //Take some time to open up the Serial Monitor
+
+  //Increment boot number and print it every reboot
+  ++bootCount;
+  Serial.println("Boot number: " + String(bootCount));
+
+  print_wakeup_reason();
+
+  //Setup sleep and wakeup on Touch Pad 3 (GPIO3/D2)
+  touchSleepWakeUpEnable(T3, TOUCH_THRESHOLD);
+  touchAttachInterrupt(T3, touch_interrupt, TOUCH_THRESHOLD);
+
+  FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, NUM_LEDS);
+}
+
+void loop() {
+  if (go_sleep) {
+    sleep();
+  }
+
+  animate();
+  FastLED.show();
 }
