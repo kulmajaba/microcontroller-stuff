@@ -1,6 +1,6 @@
 #include <FastLED.h>
 
-#define NUM_LEDS 1
+#define NUM_LEDS 6
 #define LED_PIN 2
 #define TOUCH_THRESHOLD 5000 /* Lower the value, more the sensitivity */
 
@@ -37,27 +37,30 @@ void sleep() {
   esp_deep_sleep_start();
 }
 
-uint8_t hue_to_int8(float hue)
-{
+uint8_t hue_to_int8(float hue) {
   return hue / 360 * 255;
 }
 
-uint8_t lerp8by16(uint8_t min, uint8_t max, int16_t posRaw)
-{
+uint8_t lerp8by16(uint8_t min, uint8_t max, int16_t posRaw) {
   float pos = posRaw / 65535.0 + 0.5;
   return min + pos * (max - min);
 }
 
-void animate()
-{
-  int f = 10;
-  int a = INT_MAX;
-  uint16_t ms = millis();
-  int16_t sin = sin16(ms * f);
-  uint8_t v = lerp8by16(192, 255, sin);
+CHSV get_led_rgb(uint16_t ms, uint16_t phase_offset) {
+  int f = 20;
+  int16_t sin = sin16(ms * f + phase_offset);
+  uint8_t v = lerp8by16(144, 255, sin);
   float h = 30.0;
 
-  leds[0] = CHSV(hue_to_int8(h), 255, v);
+  return CHSV(hue_to_int8(h), 255, v);
+}
+
+void animate() {
+  uint16_t ms = millis();
+
+  for (int i = 0; i < NUM_LEDS; ++i) {
+    leds[i] = get_led_rgb(ms, i * 20000);
+  }
 }
 
 void setup() {
