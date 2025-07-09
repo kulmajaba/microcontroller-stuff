@@ -1,12 +1,20 @@
 #include <FastLED.h>
 
-#define NUM_LEDS 6
-#define LED_PIN 2
+#include "led.h"
+
 #define TOUCH_THRESHOLD 5000 /* Lower the value, more the sensitivity */
 
-RTC_DATA_ATTR int bootCount = 0;
-touch_pad_t touchPin;
+#define NUM_LEDS 12
+#define GUARD_LED_PIN 2
+#define BOLSTER_LED_PIN 4
+
 CRGB leds[NUM_LEDS];
+led_group led_groups[2] = {
+  { {2, 1, 0, 3, 4, 5}, 3, 0, 20, 50000, 0 },
+  { {0, 1, 2, 3, 4, 5}, 1, 6, 20, 0, 0 }
+};
+
+RTC_DATA_ATTR int bootCount = 0;
 bool go_sleep = false;
 
 void print_wakeup_reason() {
@@ -46,20 +54,30 @@ uint8_t lerp8by16(uint8_t min, uint8_t max, int16_t posRaw) {
   return min + pos * (max - min);
 }
 
-CHSV get_led_rgb(uint16_t ms, uint16_t phase_offset) {
-  int f = 20;
-  int16_t sin = sin16(ms * f + phase_offset);
-  uint8_t v = lerp8by16(144, 255, sin);
-  float h = 30.0;
+uint8_t clamped_sin(uint16_t ms, int freq, int phase, uint8_t min, uint8_t max) {
+  int16_t sin = sin16(ms * freq + phase);
+  return lerp8by16(144, 255, sin);
+}
 
-  return CHSV(hue_to_int8(h), 255, v);
+CHSV get_led_rgb(uint16_t ms, int freq, uint16_t phase) {
+  float h = 30.0;
+  uint8_t s = 255;
+  uint8_t v = clamped_sin(ms, freq, phase, 144, 255);
+
+  return CHSV(hue_to_int8(h), s, v);
 }
 
 void animate() {
   uint16_t ms = millis();
 
-  for (int i = 0; i < NUM_LEDS; ++i) {
-    leds[i] = get_led_rgb(ms, i * 20000);
+  for (led_group group : led_groups) {
+    for (int i = 0; i < group.animated_leds; ++i) {
+      CHSV new_rgb = get_led_rgb(ms, group.fx_freq, group.fx_initial_phase + i * group.fx_phase);
+      for (int j = i; j < group.led_indexes.size(); j += group.animated_leds) {
+        int led_index = group.leds_start_index + group.led_indexes[j];
+        leds[led_index] = new_rgb;
+      }
+    }
   }
 }
 
@@ -77,7 +95,8 @@ void setup() {
   touchSleepWakeUpEnable(T3, TOUCH_THRESHOLD);
   touchAttachInterrupt(T3, touch_interrupt, TOUCH_THRESHOLD);
 
-  FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, NUM_LEDS);
+  FastLED.addLeds<NEOPIXEL, GUARD_LED_PIN>(leds, led_groups[0].leds_start_index, static_cast<int>(led_groups[0].led_indexes.size()));
+  FastLED.addLeds<NEOPIXEL, BOLSTER_LED_PIN>(leds, led_groups[1].leds_start_index, static_cast<int>(led_groups[1].led_indexes.size()));
 }
 
 void loop() {
