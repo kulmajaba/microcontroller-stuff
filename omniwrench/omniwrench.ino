@@ -5,8 +5,12 @@
 #define TOUCH_THRESHOLD 5000 /* Lower the value, more the sensitivity */
 
 #define NUM_LEDS 12
-#define GUARD_LED_PIN 2
-#define BOLSTER_LED_PIN 4
+#define GUARD_LED_PIN D3
+#define BOLSTER_LED_PIN D4
+#define FORK_LED_PIN_1 D5
+#define FORK_LED_PIN_2 D6
+
+#define LED_POWER_PIN D10
 
 CRGB leds[NUM_LEDS];
 led_group led_groups[2] = {
@@ -41,6 +45,7 @@ void touch_interrupt () {
 void sleep() {
   Serial.println("Going to sleep");
   FastLED.clear(true);
+  digitalWrite(LED_POWER_PIN, HIGH);
   delay(2000);
   esp_deep_sleep_start();
 }
@@ -97,6 +102,9 @@ void setup() {
 
   FastLED.addLeds<NEOPIXEL, GUARD_LED_PIN>(leds, led_groups[0].leds_start_index, static_cast<int>(led_groups[0].led_indexes.size()));
   FastLED.addLeds<NEOPIXEL, BOLSTER_LED_PIN>(leds, led_groups[1].leds_start_index, static_cast<int>(led_groups[1].led_indexes.size()));
+
+  pinMode(LED_POWER_PIN, OUTPUT);
+  digitalWrite(LED_POWER_PIN, LOW);
 }
 
 void loop() {
