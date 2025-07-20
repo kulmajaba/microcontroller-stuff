@@ -2,9 +2,9 @@
 
 #include "led.h"
 
-#define TOUCH_THRESHOLD 5000 /* Lower the value, more the sensitivity */
+#define TOUCH_THRESHOLD 2000 /* Lower the value, more the sensitivity */
 
-#define NUM_LEDS 12
+#define NUM_LEDS 16
 #define GUARD_LED_PIN D3
 #define BOLSTER_LED_PIN D4
 #define FORK_LED_PIN_1 D5
@@ -13,9 +13,10 @@
 #define LED_POWER_PIN D10
 
 CRGB leds[NUM_LEDS];
-led_group led_groups[2] = {
+led_group led_groups[3] = {
   { {2, 1, 0, 3, 4, 5}, 3, 0, 20, 50000, 0 },
-  { {0, 1, 2, 3, 4, 5}, 1, 6, 20, 0, 0 }
+  { {0, 1, 2, 3, 4, 5}, 1, 6, 20, 0, 0 },
+  { {3, 2, 1, 0}, 4, 12, 20, 50000, 0 }
 };
 
 RTC_DATA_ATTR int bootCount = 0;
@@ -102,6 +103,8 @@ void setup() {
 
   FastLED.addLeds<NEOPIXEL, GUARD_LED_PIN>(leds, led_groups[0].leds_start_index, static_cast<int>(led_groups[0].led_indexes.size()));
   FastLED.addLeds<NEOPIXEL, BOLSTER_LED_PIN>(leds, led_groups[1].leds_start_index, static_cast<int>(led_groups[1].led_indexes.size()));
+  FastLED.addLeds<NEOPIXEL, FORK_LED_PIN_1>(leds, led_groups[2].leds_start_index, static_cast<int>(led_groups[2].led_indexes.size()));
+  FastLED.addLeds<NEOPIXEL, FORK_LED_PIN_2>(leds, led_groups[2].leds_start_index, static_cast<int>(led_groups[2].led_indexes.size()));
 
   pinMode(LED_POWER_PIN, OUTPUT);
   digitalWrite(LED_POWER_PIN, LOW);
