@@ -89,7 +89,7 @@ void animate() {
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);  //Take some time to open up the Serial Monitor
+  //delay(1000);  //Take some time to open up the Serial Monitor
 
   //Increment boot number and print it every reboot
   ++bootCount;
